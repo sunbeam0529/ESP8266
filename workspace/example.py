@@ -2,6 +2,7 @@ import os
 import uasyncio
 from nanoweb import HttpError, Nanoweb, send_file
 from ubinascii import a2b_base64 as base64_decode
+from machine import UART
 
 CREDENTIALS = ('huahua', 'dandan')
 
@@ -54,6 +55,10 @@ async def api_ls(request):
         '"' + f + '"' for f in sorted(os.listdir('/'))
     ))
 
+@authenticate(credentials=CREDENTIALS)
+async def api_reboot(request):
+    import machine
+    machine.soft_reset()
 
 @authenticate(credentials=CREDENTIALS)
 async def api_download(request):
@@ -121,15 +126,23 @@ async def api_delete(request):
 
 naw = Nanoweb()
 
+para = {
+    'dy':'',
+    'dl':'',
+    'gl':'',
+    'dn':'',
+    'pl':'',
+    'ys':'',
+}
 # Declare route from a dict
 naw.routes = {
-    '/status.html': {'name': 'Nanoweb'},
-    '/status/*': ('/status.html', {'name': 'Nanoweb'}),
+    '/status.html': para,
     '/api/status': api_status,
     '/api/ls': api_ls,
     '/api/download/*': api_download,
     '/api/upload/*': api_upload,
     '/api/delete/*': api_delete,
+    '/api/reboot': api_reboot,
 }
 
 # Declare route directly with decorator
@@ -138,6 +151,34 @@ def ping(request):
     await request.write("HTTP/1.1 200 OK\r\n\r\n")
     await request.write("pong")
 
+
+
+async def run_task(uart,period):
+    import mylib
+    global para
+    global naw
+    while True:
+        buf = b'\x01\x04\x00\x00\x00\x0A\x70\x0D'
+        uart.write(buf)
+        await uasyncio.sleep_ms(100)
+        readbuf = uart.read()
+        dy,dl,gl,dn,pl,ys = mylib.CalcElecPara(readbuf)
+        para['dy'] = str(dy)
+        para['dl'] = str(dl)
+        para['gl'] = str(gl)
+        para['dn'] = str(dn)
+        para['pl'] = str(pl)
+        para['ys'] = str(ys)
+        naw.routes['/status.html'] = para
+        print(para)
+        await uasyncio.sleep_ms(period-100)
+
+
+
+uart = UART(0,9600)
+uart.init(9600, bits=8, parity=None, stop=1, rxbuf=50)
+
 loop = uasyncio.get_event_loop()
 loop.create_task(naw.run())
+loop.create_task(run_task(uart,1000))
 loop.run_forever()
