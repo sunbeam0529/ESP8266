@@ -68,12 +68,13 @@ def start_station(uart):
         print('Content = %s' % request)
         readbuf = ReadPara(uart)
         response = web_page(readbuf)
-        conn.send('HTTP/1.1 200 OK\n')
-        conn.send('Content-Type: text/html\n')
-        conn.send('Connection: close\n\n')
+        conn.send(b'HTTP/1.1 200 OK\n')
+        conn.send(b'Content-Type: text/html\n')
+        conn.send(b'Connection: close\n\n')
         ret = conn.write(response)
         sendtime=0
         print(ret)
+        conn.close()
       except OSError as e:
         conn.close()
         print('Connection closed')
